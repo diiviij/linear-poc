@@ -1,5 +1,5 @@
 from client import LinearClient
-from graphql.queries import GET_PROJECT_ISSUES, GET_OPEN_PROJECT_ISSUES
+from graphql.queries import GET_PROJECT_ISSUES, GET_OPEN_PROJECT_ISSUES, GET_PROJECT_DOCUMENTS
 from config import PROJECT_ID
 
 
@@ -31,6 +31,20 @@ class ProjectService:
             return []
 
         return data["project"]["issues"]["nodes"]
+
+    def get_documents(self):
+        """All Docs attached to the project — used by the PM doc-watcher."""
+        data = self.client.execute(
+            GET_PROJECT_DOCUMENTS,
+            {
+                "projectId": PROJECT_ID
+            }
+        )
+
+        if not data:
+            return []
+
+        return data["project"]["documents"]["nodes"]
 
     def get_all_issues(self):
         """All issues regardless of state, with sub-issue data — used by the QA gate."""

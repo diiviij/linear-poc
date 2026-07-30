@@ -340,3 +340,117 @@ def run_agent(user_message, tool_executors, history=None):
                     "content": json.dumps(result),
                 }
             )
+
+
+TICKET_SUGGESTIONS_SCHEMA = {
+    "name": "ticket_suggestions",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "suggestions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "priority": {
+                            "type": "integer",
+                            "description": "0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low",
+                        },
+                    },
+                    "required": ["title", "description", "priority"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["suggestions"],
+        "additionalProperties": False,
+    },
+}
+
+
+def suggest_tickets_from_doc_update(doc_title, added_text):
+    """
+    Given newly-added text in a PM planning Doc, decide whether it describes actionable work
+    (a feature, bug, or task) worth turning into a Linear ticket. Trivial edits (typo fixes,
+    formatting, administrative notes) should yield no suggestions — this is deliberately
+    conservative since every suggestion becomes a Slack approval prompt.
+    """
+    response = _get_client().chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You review newly-added text in a product manager's planning Doc and decide "
+                    "whether it describes new, actionable engineering work. Only suggest a ticket "
+                    "for concrete features, bugs, or tasks — not for administrative notes, typo "
+                    "fixes, or restructuring. If nothing actionable was added, return an empty "
+                    "suggestions list. Draft each suggestion as a clear title and a description "
+                    "with enough context for an engineer to start work."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Doc: {doc_title}\n\nNewly added text:\n{added_text}",
+            },
+        ],
+        response_format={"type": "json_schema", "json_schema": TICKET_SUGGESTIONS_SCHEMA},
+    )
+
+    return json.loads(response.choices[0].message.content)["suggestions"]
+
+
+ANALYZE_FAILURE_SCHEMA = {
+    "name": "test_failure_analysis",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "is_real_issue": {"type": "boolean"},
+            "reasoning": {"type": "string"},
+            "title": {"type": "string"},
+            "description": {"type": "string"},
+            "priority": {
+                "type": "integer",
+                "description": "0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low",
+            },
+        },
+        "required": ["is_real_issue", "reasoning", "title", "description", "priority"],
+        "additionalProperties": False,
+    },
+}
+
+
+def analyze_test_failure(test_name, error_context):
+    """
+    Given a failed Playwright test's name and its error-context (error message + accessibility
+    snapshot at time of failure), decide whether this is a genuine application bug or a
+    flaky/test-infrastructure issue. Deliberately conservative — only real, evidenced app defects
+    should result in a ticket.
+    """
+    response = _get_client().chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You review a failed Playwright end-to-end test for a web application and "
+                    "decide whether it represents a genuine application bug worth filing as a "
+                    "Linear ticket, or whether it's more likely a flaky/test-infrastructure issue "
+                    "(timing, stale test data, environment hiccups) that doesn't warrant one. Use "
+                    "the error message and the page accessibility snapshot at the time of failure "
+                    "to judge. Be conservative: only mark is_real_issue true when the evidence "
+                    "clearly points to an application defect, not a test problem. If true, draft a "
+                    "clear ticket title and description covering what was expected vs. what "
+                    "happened, referencing the test name, and a priority."
+                ),
+            },
+            {"role": "user", "content": f"Test: {test_name}\n\n{error_context}"},
+        ],
+        response_format={"type": "json_schema", "json_schema": ANALYZE_FAILURE_SCHEMA},
+    )
+
+    return json.loads(response.choices[0].message.content)

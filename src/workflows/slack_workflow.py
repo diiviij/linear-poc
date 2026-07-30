@@ -7,6 +7,7 @@ from config import SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_FEED_CHANNEL_ID
 from services.issue_service import IssueService
 from services.project_service import ProjectService
 from services import ai_service
+from workflows.pm_doc_workflow import load_approvals, save_approvals
 
 app = App(token=SLACK_BOT_TOKEN)
 
@@ -190,6 +191,42 @@ def handle_dm(event, say):
     if event.get("bot_id") or event.get("subtype"):
         return
     _respond(event, say)
+
+
+@app.event("message")
+def handle_approval_reply(event, say):
+    """Thread replies to a PM-doc ticket-suggestion prompt: 'yes' creates the ticket, anything
+    else (starting with 'no') skips it — no ticket is created without an explicit yes."""
+    print(f"DEBUG approval_reply raw event: {event}")
+
+    thread_ts = event.get("thread_ts")
+    if not thread_ts or event.get("bot_id") or event.get("subtype"):
+        print(f"DEBUG bailing: thread_ts={thread_ts!r} bot_id={event.get('bot_id')!r} subtype={event.get('subtype')!r}")
+        return
+
+    approvals = load_approvals()
+    print(f"DEBUG pending keys: {list(approvals.keys())}, looking for: {thread_ts!r}")
+    pending = approvals.get(thread_ts)
+    if not pending:
+        return
+
+    text = event.get("text", "").strip().lower()
+
+    if text in ("yes", "y", "approve", "approved"):
+        created = issue_service.create_issue(pending["title"], pending["description"], pending["priority"])
+        issue = created["issueCreate"]["issue"] if created else None
+        if issue:
+            say(text=f"Created <{issue['url']}|{issue['identifier']}: {issue['title']}>", thread_ts=thread_ts)
+        else:
+            say(text="Couldn't create the issue — check the logs.", thread_ts=thread_ts)
+        del approvals[thread_ts]
+        save_approvals(approvals)
+    elif text in ("no", "n", "reject", "skip"):
+        say(text="Skipped — no ticket created.", thread_ts=thread_ts)
+        del approvals[thread_ts]
+        save_approvals(approvals)
+    else:
+        say(text="Reply `yes` or `no` to resolve this suggestion.", thread_ts=thread_ts)
 
 
 def _respond(event, say):

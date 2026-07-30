@@ -97,6 +97,22 @@ query ($teamId: String!) {
 }
 """
 
+GET_PROJECT_DOCUMENTS = """
+query ($projectId: String!) {
+  project(id: $projectId) {
+    documents {
+      nodes {
+        id
+        title
+        content
+        updatedAt
+        url
+      }
+    }
+  }
+}
+"""
+
 GET_ISSUE_BY_IDENTIFIER = """
 query ($id: String!) {
   issue(id: $id) {
