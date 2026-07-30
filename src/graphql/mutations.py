@@ -37,6 +37,22 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
 }
 """
 
+FILE_UPLOAD = """
+mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
+  fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+    success
+    uploadFile {
+      uploadUrl
+      assetUrl
+      headers {
+        key
+        value
+      }
+    }
+  }
+}
+"""
+
 CREATE_COMMENT = """
 mutation CommentCreate($input: CommentCreateInput!) {
   commentCreate(input: $input) {

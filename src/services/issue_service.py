@@ -1,8 +1,11 @@
+import requests
+
 from client import LinearClient
 from graphql.mutations import (
     CREATE_ISSUE,
     UPDATE_ISSUE,
     CREATE_COMMENT,
+    FILE_UPLOAD,
 )
 from graphql.queries import GET_ISSUE_BY_IDENTIFIER, GET_TEAM_MEMBERS, GET_TEAM_STATES
 from config import TEAM_ID, PROJECT_ID
@@ -62,6 +65,25 @@ class IssueService:
         )
 
         return data["issue"] if data else None
+
+    def upload_file(self, content_type, filename, file_bytes):
+        """Uploads a file to Linear's own asset storage and returns its public assetUrl — used so
+        screenshots/traces can be embedded or linked in an issue without requiring viewers to have
+        credentials for whatever external system (e.g. Jenkins) originally produced the file."""
+        result = self.client.execute(
+            FILE_UPLOAD,
+            {"contentType": content_type, "filename": filename, "size": len(file_bytes)},
+        )
+        upload_file_data = result["fileUpload"]["uploadFile"]
+
+        headers = {"Content-Type": content_type}
+        for header in upload_file_data["headers"]:
+            headers[header["key"]] = header["value"]
+
+        put_resp = requests.put(upload_file_data["uploadUrl"], data=file_bytes, headers=headers)
+        put_resp.raise_for_status()
+
+        return upload_file_data["assetUrl"]
 
     def add_comment(self, issue_id, body):
         variables = {
