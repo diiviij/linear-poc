@@ -1,8 +1,10 @@
 name: Linear Polling Automations
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # Schedule paused while local cron drives the demo (avoids double-processing,
+  # since local and Actions runs don't share poll-state). Re-add:
+  #   schedule:
+  #     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
