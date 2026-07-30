@@ -53,8 +53,15 @@ def _tool_get_issue(identifier):
     return _issue_summary(issue)
 
 
-def _tool_create_issue(title, description, priority=None):
-    result = issue_service.create_issue(title, description, priority)
+def _tool_create_issue(title, description, priority=None, assignee_name=None):
+    assignee_id = None
+    if assignee_name is not None:
+        member, error = _find_member_by_name(assignee_name)
+        if error:
+            return {"error": error}
+        assignee_id = member["id"]
+
+    result = issue_service.create_issue(title, description, priority, assignee_id=assignee_id)
     if not result or not result["issueCreate"]["success"]:
         return {"error": "Failed to create issue"}
     return result["issueCreate"]["issue"]

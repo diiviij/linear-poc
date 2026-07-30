@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -14,6 +15,20 @@ def _get_client():
     if _client is None:
         _client = OpenAI(api_key=OPENAI_API_KEY)
     return _client
+
+
+_MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+_MARKDOWN_BOLD = re.compile(r"\*\*([^*]+)\*\*")
+
+
+def _to_slack_mrkdwn(text):
+    """Model output sometimes slips into standard Markdown despite the prompt — convert the
+    common cases (links, bold) to Slack's mrkdwn syntax rather than relying on the model alone."""
+    if not text:
+        return text
+    text = _MARKDOWN_LINK.sub(r"<\2|\1>", text)
+    text = _MARKDOWN_BOLD.sub(r"*\1*", text)
+    return text
 
 # Assignees carrying this many open issues get flagged in the status digest
 OVERLOAD_THRESHOLD = 5
@@ -150,7 +165,7 @@ def generate_status_digest(open_issues, stale_days=STALE_ISSUE_DAYS):
         ],
     )
 
-    return response.choices[0].message.content
+    return _to_slack_mrkdwn(response.choices[0].message.content)
 
 
 AGENT_TOOLS = [
@@ -180,18 +195,27 @@ AGENT_TOOLS = [
         "function": {
             "name": "create_issue",
             "description": (
-                "File a brand-new issue for a problem that doesn't exist yet. Do NOT call this "
-                "if the user's message references an existing issue identifier (e.g. 'SPDEV-72') "
-                "or is asking to update/assign/reprioritize/comment on an issue — use update_issue "
-                "or add_comment for those instead, and never call create_issue in the same turn as "
-                "update_issue."
+                "File a brand-new issue for a problem that doesn't exist yet — this already "
+                "supports setting the assignee and priority at creation time, so a request like "
+                "'create a ticket for X and assign it to Y' needs only this one call. Do NOT call "
+                "this if the user's message references an existing issue identifier (e.g. "
+                "'SPDEV-72') or is asking to update/assign/reprioritize/comment on an issue that "
+                "already exists — use update_issue or add_comment for those instead, and never "
+                "call create_issue in the same turn as update_issue for the SAME issue."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
-                    "priority": {"type": "integer"},
+                    "priority": {
+                        "type": "integer",
+                        "description": "0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low",
+                    },
+                    "assignee_name": {
+                        "type": "string",
+                        "description": "Name of the person to assign the new issue to, if given.",
+                    },
                 },
                 "required": ["title", "description"],
                 "additionalProperties": False,
@@ -258,9 +282,12 @@ AGENT_TOOLS = [
 AGENT_SYSTEM_PROMPT = (
     "You are a Linear assistant available to the team in Slack. Use the available tools to "
     "answer questions about issues or take actions the user asks for (creating issues, "
-    "assigning/updating existing issues, commenting, checking status). Keep replies short and "
-    "Slack-friendly. Never fabricate issue identifiers, titles, statuses, or usernames — always "
-    "look them up with a tool first.\n\n"
+    "assigning/updating existing issues, commenting, checking status). Keep replies short. "
+    "Never fabricate issue identifiers, titles, statuses, or usernames — always look them up "
+    "with a tool first.\n\n"
+    "Format replies using Slack's mrkdwn, NOT standard Markdown: links must be written as "
+    "<https://example.com|link text> (never [link text](https://example.com)), bold as *text* "
+    "(never **text**), and no '#' headers.\n\n"
     "Only call create_issue when the user is reporting a brand-new problem that doesn't already "
     "exist. If the message mentions an existing issue identifier (e.g. 'SPDEV-72') or asks to "
     "assign/update/reprioritize/comment on an issue, that is NEVER a create_issue request — use "
@@ -295,7 +322,7 @@ def run_agent(user_message, tool_executors, history=None):
 
         if not choice.message.tool_calls:
             updated_history = messages[1:]
-            return choice.message.content, updated_history
+            return _to_slack_mrkdwn(choice.message.content), updated_history
 
         for tool_call in choice.message.tool_calls:
             executor = tool_executors.get(tool_call.function.name)

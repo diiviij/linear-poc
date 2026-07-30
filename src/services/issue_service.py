@@ -12,7 +12,7 @@ class IssueService:
     def __init__(self):
         self.client = LinearClient()
 
-    def create_issue(self, title, description, priority=None, parent_id=None):
+    def create_issue(self, title, description, priority=None, parent_id=None, assignee_id=None):
         input_data = {
             "teamId": TEAM_ID,
             "projectId": PROJECT_ID,
@@ -24,6 +24,8 @@ class IssueService:
             input_data["priority"] = priority
         if parent_id is not None:
             input_data["parentId"] = parent_id
+        if assignee_id is not None:
+            input_data["assigneeId"] = assignee_id
 
         return self.client.execute(CREATE_ISSUE, {"input": input_data})
 

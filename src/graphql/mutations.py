@@ -7,6 +7,10 @@ mutation IssueCreate($input: IssueCreateInput!) {
       identifier
       title
       url
+      priority
+      assignee {
+        name
+      }
     }
   }
 }
