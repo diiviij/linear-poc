@@ -1,0 +1,50 @@
+name: Linear Polling Automations
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: state
+          key: poll-state-${{ github.run_id }}
+          restore-keys: |
+            poll-state-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r ../requirements.txt
+
+      - name: GitHub PR/branch sync
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_POLL_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: python run_github_poll.py
+
+      - name: Jenkins CI sync
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          JENKINS_JOB_NAME: ${{ secrets.JENKINS_JOB_NAME }}
+        run: python run_jenkins_poll.py
+
+      - name: QA gate
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: python run_qa_gate.py

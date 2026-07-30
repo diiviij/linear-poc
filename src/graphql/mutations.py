@@ -11,7 +11,7 @@ mutation IssueCreate($input: IssueCreateInput!) {
   }
 }
 """
-UPDATE_ISSUE_STATE = """
+UPDATE_ISSUE = """
 mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
   issueUpdate(
     id: $id
@@ -21,9 +21,25 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
     issue {
       identifier
       title
+      priority
       state {
         name
       }
+      assignee {
+        name
+      }
+    }
+  }
+}
+"""
+
+CREATE_COMMENT = """
+mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+    comment {
+      id
+      body
     }
   }
 }
