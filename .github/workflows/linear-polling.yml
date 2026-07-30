@@ -29,6 +29,7 @@ jobs:
         run: pip install -r ../requirements.txt
 
       - name: GitHub PR/branch sync
+        if: always()
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_POLL_TOKEN }}
@@ -36,6 +37,7 @@ jobs:
         run: python run_github_poll.py
 
       - name: Jenkins CI sync
+        if: always()
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
@@ -45,6 +47,7 @@ jobs:
         run: python run_jenkins_poll.py
 
       - name: QA gate
+        if: always()
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: python run_qa_gate.py
