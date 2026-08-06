@@ -141,8 +141,7 @@ TOOL_EXECUTORS = {
 }
 
 
-# Not registered as a listener — feed-channel triage is disabled for now.
-# Re-enable by restoring the "@app.event(\"message\")" decorator below.
+@app.event("message")
 def handle_feed_message(event, say):
     """Raw bug reports / feedback posted in the triage feed channel get classified,
     deduped against open issues, and turned into (or attached to) a Linear issue."""
